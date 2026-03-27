@@ -1,0 +1,8 @@
+- name: Build Valheim host
+  hosts: valheim_hosts
+  become: true
+
+  roles:
+    - common
+    - docker
+    - valheim

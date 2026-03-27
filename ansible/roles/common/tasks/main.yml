@@ -1,0 +1,23 @@
+- name: Update apt cache
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+      - python3-pip
+      - ufw
+      - acl
+      - tzdata
+    state: present
+
+- name: Set timezone symlink
+  file:
+    src: "/usr/share/zoneinfo/{{ valheim.timezone }}"
+    dest: /etc/localtime
+    state: link
+    force: true

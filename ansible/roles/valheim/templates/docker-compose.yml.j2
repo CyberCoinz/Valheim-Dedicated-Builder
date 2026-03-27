@@ -1,0 +1,14 @@
+services:
+  valheim:
+    image: {{ valheim_image }}
+    container_name: valheim-server
+    restart: unless-stopped
+    env_file:
+      - ./valheim.env
+    ports:
+      - "{{ valheim.base_port }}:{{ valheim.base_port }}/udp"
+      - "{{ valheim.base_port + 1 }}:{{ valheim.base_port + 1 }}/udp"
+      - "{{ valheim.base_port + 2 }}:{{ valheim.base_port + 2 }}/udp"
+    volumes:
+      - "{{ valheim.config_dir }}:/config"
+      - "{{ valheim.data_dir }}:/opt/valheim"

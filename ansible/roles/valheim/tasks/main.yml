@@ -1,0 +1,26 @@
+- name: Create Valheim directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ valheim.root_dir }}"
+    - "{{ valheim.config_dir }}"
+    - "{{ valheim.data_dir }}"
+
+- name: Render Valheim env file
+  template:
+    src: valheim.env.j2
+    dest: "{{ valheim.root_dir }}/valheim.env"
+    mode: "0600"
+
+- name: Render Docker Compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ valheim.root_dir }}/docker-compose.yml"
+    mode: "0644"
+
+- name: Start Valheim with Docker Compose v2
+  community.docker.docker_compose_v2:
+    project_src: "{{ valheim.root_dir }}"
+    state: present
