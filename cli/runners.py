@@ -5,7 +5,7 @@ from pyVmomi import vim, vmodl
 from pyVim import connect
 import yaml
 
-from config_writer import write_yaml_file
+from .config_writer import write_yaml_file
 
 
 def load_local_config():
@@ -19,7 +19,7 @@ def load_local_config():
             return yaml.safe_load(f) or {}
     except Exception:
         return {}
-from validators import (
+from .validators import (
     validate_host_address,
     validate_ssh_username,
     validate_ssh_key_exists,

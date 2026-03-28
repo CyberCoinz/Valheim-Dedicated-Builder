@@ -1,5 +1,5 @@
-from prompts import main_menu
-from runners import run_existing_host_deploy, run_backup_server, run_restore_server, run_smoke_test, run_create_vm_deploy
+from .prompts import main_menu
+from .runners import run_existing_host_deploy, run_backup_server, run_restore_server, run_smoke_test, run_create_vm_deploy
 
 
 def main() -> None:
