@@ -156,3 +156,99 @@ def validate_port_number(port: int) -> tuple[bool, str]:
         return False, f"Port must be between 1024 and 65535: {port}"
     
     return True, ""
+
+
+def validate_esxi_host(host: str) -> tuple[bool, str]:
+    """
+    Validate ESXi host is valid IP or hostname.
+    Returns: (is_valid, error_message)
+    """
+    return validate_host_address(host)
+
+
+def validate_esxi_username(username: str) -> tuple[bool, str]:
+    """
+    Validate ESXi username format.
+    Returns: (is_valid, error_message)
+    """
+    if not username or not username.strip():
+        return False, "ESXi username cannot be empty"
+    
+    # Basic username validation
+    if len(username) < 1:
+        return False, "ESXi username cannot be empty"
+    
+    if len(username) > 50:
+        return False, "ESXi username must be less than 50 characters"
+    
+    return True, ""
+
+
+def validate_esxi_password(password: str) -> tuple[bool, str]:
+    """
+    Validate ESXi password is not empty.
+    Returns: (is_valid, error_message)
+    """
+    if not password or not password.strip():
+        return False, "ESXi password cannot be empty"
+    
+    if len(password) < 1:
+        return False, "ESXi password cannot be empty"
+    
+    return True, ""
+
+
+def validate_vm_template_name(template: str) -> tuple[bool, str]:
+    """
+    Validate VM template name is not empty.
+    Returns: (is_valid, error_message)
+    """
+    if not template or not template.strip():
+        return False, "VM template name cannot be empty"
+    
+    if len(template) < 1:
+        return False, "VM template name cannot be empty"
+    
+    if len(template) > 50:
+        return False, "VM template name must be less than 50 characters"
+    
+    return True, ""
+
+
+def validate_vm_name(vm_name: str) -> tuple[bool, str]:
+    """
+    Validate VM name is not empty and reasonable.
+    Returns: (is_valid, error_message)
+    """
+    if not vm_name or not vm_name.strip():
+        return False, "VM name cannot be empty"
+    
+    if len(vm_name) < 2:
+        return False, "VM name must be at least 2 characters"
+    
+    if len(vm_name) > 50:
+        return False, "VM name must be less than 50 characters"
+    
+    # Basic check for valid VM name characters
+    vm_name_pattern = r"^[a-zA-Z0-9_-]+$"
+    if not re.match(vm_name_pattern, vm_name):
+        return False, f"VM name contains invalid characters (only letters, numbers, underscore, hyphen allowed): {vm_name}"
+    
+    return True, ""
+
+
+def validate_datastore_name(datastore: str) -> tuple[bool, str]:
+    """
+    Validate datastore name is not empty.
+    Returns: (is_valid, error_message)
+    """
+    if not datastore or not datastore.strip():
+        return False, "Datastore name cannot be empty"
+    
+    if len(datastore) < 1:
+        return False, "Datastore name cannot be empty"
+    
+    if len(datastore) > 50:
+        return False, "Datastore name must be less than 50 characters"
+    
+    return True, ""

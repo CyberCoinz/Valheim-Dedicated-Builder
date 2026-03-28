@@ -1,6 +1,8 @@
 import subprocess
 from pathlib import Path
 import socket
+from pyVmomi import vim, vmodl
+from pyVim import connect
 
 from config_writer import write_yaml_file
 from validators import (
@@ -11,6 +13,12 @@ from validators import (
     validate_world_name,
     validate_server_password,
     validate_timezone,
+    validate_esxi_host,
+    validate_esxi_username,
+    validate_esxi_password,
+    validate_vm_template_name,
+    validate_vm_name,
+    validate_datastore_name,
 )
 
 
@@ -380,3 +388,243 @@ valheim1 ansible_host={host} ansible_user={ssh_user}"""
         # Cleanup temp inventory
         if temp_inventory_path.exists():
             temp_inventory_path.unlink()
+
+
+def connect_to_esxi(host: str, user: str, password: str):
+    """Connect to ESXi host and return service instance."""
+    try:
+        service_instance = connect.SmartConnectNoSSL(
+            host=host,
+            user=user,
+            pwd=password,
+            port=443
+        )
+        return service_instance
+    except Exception as e:
+        raise Exception(f"Failed to connect to ESXi: {e}")
+
+
+def get_obj(content, vimtype, name):
+    """Get object by name from vSphere inventory."""
+    obj = None
+    container = content.viewManager.CreateContainerView(
+        content.rootFolder, vimtype, True
+    )
+    for c in container.view:
+        if c.name == name:
+            obj = c
+            break
+    return obj
+
+
+def clone_vm(service_instance, template_name: str, vm_name: str, datastore_name: str):
+    """Clone VM from template."""
+    content = service_instance.RetrieveContent()
+    
+    # Find template
+    template = get_obj(content, [vim.VirtualMachine], template_name)
+    if not template:
+        raise Exception(f"Template '{template_name}' not found")
+    
+    # Find datastore
+    datastore = get_obj(content, [vim.Datastore], datastore_name)
+    if not datastore:
+        raise Exception(f"Datastore '{datastore_name}' not found")
+    
+    # Get the folder where the template is located
+    destfolder = template.parent
+    
+    # VM relocation spec
+    relospec = vim.vm.RelocateSpec()
+    relospec.datastore = datastore
+    relospec.pool = template.resourcePool
+    
+    # VM clone spec
+    clonespec = vim.vm.CloneSpec()
+    clonespec.location = relospec
+    clonespec.powerOn = True
+    
+    print(f"[*] Cloning VM '{vm_name}' from template '{template_name}'...")
+    task = template.Clone(folder=destfolder, name=vm_name, spec=clonespec)
+    
+    # Wait for task completion
+    while task.info.state not in [vim.TaskInfo.State.success, vim.TaskInfo.State.error]:
+        pass
+    
+    if task.info.state == vim.TaskInfo.State.error:
+        raise Exception(f"VM clone failed: {task.info.error}")
+    
+    # Get the cloned VM
+    cloned_vm = get_obj(content, [vim.VirtualMachine], vm_name)
+    return cloned_vm
+
+
+def get_vm_ip(service_instance, vm_name: str, timeout: int = 300):
+    """Get IP address of the VM."""
+    content = service_instance.RetrieveContent()
+    vm = get_obj(content, [vim.VirtualMachine], vm_name)
+    
+    if not vm:
+        raise Exception(f"VM '{vm_name}' not found")
+    
+    import time
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
+        if vm.guest.ipAddress:
+            return vm.guest.ipAddress
+        time.sleep(5)
+    
+    raise Exception(f"Timeout waiting for VM '{vm_name}' to get IP address")
+
+
+def run_create_vm_deploy() -> None:
+    """Create VM on ESXi and deploy Valheim server."""
+    print("\n[*] Create VM and Deploy Valheim Server (ESXi)\n")
+    
+    # ESXi connection details
+    esxi_host = prompt_with_validation(
+        "ESXi host/IP",
+        validate_esxi_host
+    )
+    
+    esxi_user = prompt_with_validation(
+        "ESXi username",
+        validate_esxi_username
+    )
+    
+    esxi_password = input("ESXi password: ").strip()
+    is_valid, error_msg = validate_esxi_password(esxi_password)
+    if not is_valid:
+        print(f"  ✗ {error_msg}")
+        return
+    
+    # VM details
+    vm_template = prompt_with_validation(
+        "VM template name",
+        validate_vm_template_name
+    )
+    
+    vm_name = prompt_with_validation(
+        "New VM name",
+        validate_vm_name
+    )
+    
+    datastore = prompt_with_validation(
+        "Datastore name",
+        validate_datastore_name
+    )
+    
+    # Valheim server config
+    timezone = prompt_with_validation(
+        "Timezone",
+        validate_timezone,
+        default="America/New_York"
+    )
+    
+    server_name = prompt_with_validation(
+        "Server name",
+        validate_server_name
+    )
+    
+    world_name = prompt_with_validation(
+        "World name",
+        validate_world_name
+    )
+    
+    server_password = prompt_with_validation(
+        "Server password (5+ characters)",
+        validate_server_password
+    )
+    
+    # Port availability check (local check, VM will have its own)
+    base_port = 2456
+    print(f"\n[*] Note: Ports {list(range(base_port, base_port + 3))} will be used on the VM")
+    
+    config = {
+        "valheim": {
+            "timezone": timezone,
+            "server_name": server_name,
+            "world_name": world_name,
+            "server_password": server_password,
+            "server_public": 1,
+            "base_port": base_port,
+            "root_dir": "/opt/valheim",
+            "config_dir": "/opt/valheim/config",
+            "data_dir": "/opt/valheim/data",
+        }
+    }
+    
+    print("\n[*] Configuration summary:")
+    print(f"  ESXi Host: {esxi_host}")
+    print(f"  VM Template: {vm_template}")
+    print(f"  New VM: {vm_name}")
+    print(f"  Datastore: {datastore}")
+    print(f"  Server: {server_name}")
+    print(f"  World: {world_name}")
+    print(f"  Ports: {list(range(base_port, base_port + 3))}")
+    print(f"  Timezone: {timezone}")
+    
+    confirm = input("\nProceed with VM creation and deployment? (y/n) [y]: ").strip().lower()
+    if confirm == "n":
+        print("VM creation cancelled.")
+        return
+    
+    service_instance = None
+    try:
+        # Connect to ESXi
+        print("\n[*] Connecting to ESXi...")
+        service_instance = connect_to_esxi(esxi_host, esxi_user, esxi_password)
+        
+        # Clone VM
+        cloned_vm = clone_vm(service_instance, vm_template, vm_name, datastore)
+        print(f"[✓] VM '{vm_name}' created successfully")
+        
+        # Wait for VM to get IP
+        print("[*] Waiting for VM to boot and get IP address...")
+        vm_ip = get_vm_ip(service_instance, vm_name)
+        print(f"[✓] VM IP address: {vm_ip}")
+        
+        # Write config
+        write_yaml_file(config, "config/generated/deployment.yml")
+        
+        # Write inventory for the new VM (assume SSH key auth for now, or password)
+        # For simplicity, assume password auth initially
+        ssh_user = "ubuntu"  # Assume Ubuntu VM template
+        ssh_password = "ubuntu"  # This should be changed, but for demo
+        
+        inventory_text = f"""[valheim_hosts]
+valheim1 ansible_host={vm_ip} ansible_user={ssh_user} ansible_ssh_pass={ssh_password}
+"""
+        inventory_path = Path("inventory/hosts.ini")
+        inventory_path.parent.mkdir(parents=True, exist_ok=True)
+        inventory_path.write_text(inventory_text, encoding="utf-8")
+        
+        print("[*] Waiting for VM to be ready for SSH...")
+        import time
+        time.sleep(30)  # Wait for SSH to be available
+        
+        # Run Ansible deployment
+        ansible_cmd = [
+            "ansible-playbook",
+            "-i", "inventory/hosts.ini",
+            "ansible/site.yml",
+            "-e", "@config/generated/deployment.yml",
+            "-k", "-K"  # Ask for SSH password and sudo password
+        ]
+        
+        run_cmd(ansible_cmd)
+        
+        print(f"\n[✓] VM creation and deployment complete!")
+        print(f"    VM Name: {vm_name}")
+        print(f"    VM IP: {vm_ip}")
+        print(f"    Server: {server_name}")
+        print(f"    World: {world_name}")
+        print(f"    Ports: {list(range(base_port, base_port + 3))}")
+        print(f"    Backups: /opt/valheim/backups (daily at 03:00 UTC)")
+        
+    except Exception as e:
+        print(f"\n[✗] VM creation/deployment failed: {e}")
+    finally:
+        if service_instance:
+            connect.Disconnect(service_instance)
