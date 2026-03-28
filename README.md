@@ -43,6 +43,29 @@ Valheim Builder is an orchestration tool that:
 
 ---
 
+## 🚀 Phase 3: ESXi VM Automation
+
+### VM Provisioning
+- ✅ **ESXi integration** - Connect to VMware ESXi hosts
+- ✅ **VM cloning** - Create new VMs from Ubuntu templates
+- ✅ **Automatic IP detection** - Wait for VM to boot and get IP
+- ✅ **Full deployment** - VM creation + Valheim server setup in one step
+
+### Prerequisites for VM Creation
+- VMware ESXi host with SSH access
+- Ubuntu VM template configured for cloning
+- Datastore with sufficient space
+- ESXi credentials with VM creation permissions
+
+### VM Deployment Process
+1. Connect to ESXi host
+2. Clone VM from template
+3. Power on and wait for IP assignment
+4. Deploy Valheim server via Ansible
+5. Configure firewall and backups automatically
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -97,7 +120,11 @@ The CLI will:
 Valheim Builder
 ----------------
 1. Deploy to existing Ubuntu host
-2. Exit
+2. Backup a server
+3. Restore a server
+4. Smoke test deployment
+5. Create VM and deploy (ESXi)
+6. Exit
 ```
 
 **Option 1: Deploy to existing Ubuntu host**
