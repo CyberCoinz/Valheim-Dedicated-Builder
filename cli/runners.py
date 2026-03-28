@@ -667,13 +667,36 @@ def run_create_vm_deploy() -> None:
         # Write config
         write_yaml_file(config, "config/generated/deployment.yml")
         
-        # Write inventory for the new VM (assume SSH key auth for now, or password)
-        # For simplicity, assume password auth initially
-        ssh_user = "ubuntu"  # Assume Ubuntu VM template
-        ssh_password = "ubuntu"  # This should be changed, but for demo
+        # Get SSH credentials for the new VM
+        print("\n[*] SSH credentials for the new VM:")
+        vm_ssh_user = prompt_with_validation(
+            "VM SSH username",
+            validate_ssh_username,
+            default="ubuntu"
+        )
         
-        inventory_text = f"""[valheim_hosts]
-valheim1 ansible_host={vm_ip} ansible_user={ssh_user} ansible_ssh_pass={ssh_password}
+        vm_auth_method = input("VM SSH auth method (key/password) [password]: ").strip().lower() or "password"
+        
+        vm_ssh_key_path = None
+        vm_ssh_password = None
+        
+        if vm_auth_method == "key":
+            vm_ssh_key_path = prompt_with_validation(
+                "VM SSH private key path",
+                validate_ssh_key_exists,
+                default="~/.ssh/id_ed25519"
+            )
+        else:
+            vm_ssh_password = input("VM SSH password: ").strip()
+        
+        # Write inventory for the new VM
+        if vm_ssh_key_path:
+            inventory_text = f"""[valheim_hosts]
+valheim1 ansible_host={vm_ip} ansible_user={vm_ssh_user} ansible_ssh_private_key_file={vm_ssh_key_path}
+"""
+        else:
+            inventory_text = f"""[valheim_hosts]
+valheim1 ansible_host={vm_ip} ansible_user={vm_ssh_user} ansible_ssh_pass={vm_ssh_password}
 """
         inventory_path = Path("inventory/hosts.ini")
         inventory_path.parent.mkdir(parents=True, exist_ok=True)
@@ -689,8 +712,10 @@ valheim1 ansible_host={vm_ip} ansible_user={ssh_user} ansible_ssh_pass={ssh_pass
             "-i", "inventory/hosts.ini",
             "ansible/site.yml",
             "-e", "@config/generated/deployment.yml",
-            "-k", "-K"  # Ask for SSH password and sudo password
         ]
+        
+        if not vm_ssh_key_path:
+            ansible_cmd.extend(["-k", "-K"])  # Ask for SSH password and sudo password
         
         run_cmd(ansible_cmd)
         

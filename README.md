@@ -236,10 +236,10 @@ After deployment, your host has:
 python cli/main.py
 
 # Provide:
-# - Host: 192.168.1.50
+# - Host: your-server-ip
 # - User: ubuntu
 # - Auth: password (or key path)
-# - Password: QAZqazQAZ123$%^
+# - Password: [your-ssh-password]
 ```
 
 ### Check Server Status (On Target Host)
