@@ -71,6 +71,10 @@ def run_existing_host_deploy() -> None:
     ]
     
     if not ssh_key_path:
-        ansible_cmd.append("-k")
+        ansible_cmd.extend(["-k", "-K"])
     
     run_cmd(ansible_cmd)
+    
+    # Post-deployment verification
+    print("\n[+] Deployment complete! Verifying Valheim server...")
+    verify_deployment(host, ssh_user, ssh_key_path, ssh_password)
