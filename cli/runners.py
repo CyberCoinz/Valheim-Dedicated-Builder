@@ -3,8 +3,22 @@ from pathlib import Path
 import socket
 from pyVmomi import vim, vmodl
 from pyVim import connect
+import yaml
 
 from config_writer import write_yaml_file
+
+
+def load_local_config():
+    """Load local configuration file with sensitive data."""
+    config_path = Path("config/local.yml")
+    if not config_path.exists():
+        return {}
+    
+    try:
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return {}
 from validators import (
     validate_host_address,
     validate_ssh_username,
@@ -84,32 +98,65 @@ valheim1 ansible_host={host} ansible_user={ssh_user} ansible_ssh_pass={ssh_passw
 def run_existing_host_deploy() -> None:
     print("\n[*] Gathering deployment parameters...\n")
     
-    # Host validation
-    host = prompt_with_validation(
-        "Target host/IP",
-        validate_host_address
-    )
+    local_config = load_local_config()
     
-    # SSH user validation
-    ssh_user = prompt_with_validation(
-        "SSH user",
-        validate_ssh_username
-    )
+    # Check for saved hosts
+    saved_hosts = local_config.get('hosts', [])
+    if saved_hosts:
+        print("Saved hosts:")
+        for i, host in enumerate(saved_hosts, 1):
+            print(f"  {i}. {host['name']} ({host['ip']})")
+        print("  0. Enter new host")
+        
+        choice = input("Choose a saved host or enter 0 for new: ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(saved_hosts):
+            host_config = saved_hosts[int(choice) - 1]
+            host = host_config['ip']
+            ssh_user = host_config['user']
+            auth_method = host_config['auth']
+            ssh_key_path = host_config.get('key_path', '~/.ssh/id_ed25519')
+            ssh_password = host_config.get('password', '')
+        else:
+            host = None
+    else:
+        host = None
     
-    # Authentication method
-    auth_method = input("SSH auth method (key/password) [password]: ").strip().lower() or "password"
+    if host is None:
+        # Host validation
+        host = prompt_with_validation(
+            "Target host/IP",
+            validate_host_address
+        )
     
-    ssh_key_path = None
-    ssh_password = None
+    if 'ssh_user' not in locals():
+        # SSH user validation
+        default_user = local_config.get('ssh', {}).get('default_user', 'ubuntu')
+        ssh_user = prompt_with_validation(
+            "SSH user",
+            validate_ssh_username,
+            default=default_user
+        )
+    
+    if 'auth_method' not in locals():
+        # Authentication method
+        auth_method = input("SSH auth method (key/password) [password]: ").strip().lower() or "password"
+    
+    if 'ssh_key_path' not in locals():
+        ssh_key_path = None
+    if 'ssh_password' not in locals():
+        ssh_password = None
     
     if auth_method == "key":
-        ssh_key_path = prompt_with_validation(
-            "SSH private key path",
-            validate_ssh_key_exists,
-            default="~/.ssh/id_ed25519"
-        )
+        if ssh_key_path is None:
+            default_key = local_config.get('ssh', {}).get('default_key_path', '~/.ssh/id_ed25519')
+            ssh_key_path = prompt_with_validation(
+                "SSH private key path",
+                validate_ssh_key_exists,
+                default=default_key
+            )
     else:
-        ssh_password = input("SSH password: ").strip()
+        if ssh_password == '':
+            ssh_password = input("SSH password: ").strip()
     
     # Timezone validation
     timezone = prompt_with_validation(
@@ -482,37 +529,69 @@ def run_create_vm_deploy() -> None:
     """Create VM on ESXi and deploy Valheim server."""
     print("\n[*] Create VM and Deploy Valheim Server (ESXi)\n")
     
-    # ESXi connection details
-    esxi_host = prompt_with_validation(
-        "ESXi host/IP",
-        validate_esxi_host
-    )
+    local_config = load_local_config()
+    esxi_config = local_config.get('esxi', {})
     
+    # ESXi connection details
+    default_host = esxi_config.get('host', '')
+    if default_host:
+        esxi_host = prompt_with_validation(
+            "ESXi host/IP",
+            validate_esxi_host,
+            default=default_host
+        )
+    else:
+        esxi_host = prompt_with_validation(
+            "ESXi host/IP",
+            validate_esxi_host
+        )
+    
+    default_user = esxi_config.get('username', 'root')
     esxi_user = prompt_with_validation(
         "ESXi username",
-        validate_esxi_username
+        validate_esxi_username,
+        default=default_user
     )
     
-    esxi_password = input("ESXi password: ").strip()
+    stored_password = esxi_config.get('password', '')
+    if stored_password:
+        use_stored = input(f"Use stored password for {esxi_user}? (y/n) [y]: ").strip().lower()
+        if use_stored != 'n':
+            esxi_password = stored_password
+        else:
+            esxi_password = input("ESXi password: ").strip()
+    else:
+        esxi_password = input("ESXi password: ").strip()
+    
     is_valid, error_msg = validate_esxi_password(esxi_password)
     if not is_valid:
         print(f"  ✗ {error_msg}")
         return
     
     # VM details
-    vm_template = prompt_with_validation(
-        "VM template name",
-        validate_vm_template_name
-    )
+    default_template = esxi_config.get('vm_template', '')
+    if default_template:
+        vm_template = prompt_with_validation(
+            "VM template name",
+            validate_vm_template_name,
+            default=default_template
+        )
+    else:
+        vm_template = prompt_with_validation(
+            "VM template name",
+            validate_vm_template_name
+        )
     
     vm_name = prompt_with_validation(
         "New VM name",
         validate_vm_name
     )
     
+    default_datastore = esxi_config.get('datastore', 'datastore1')
     datastore = prompt_with_validation(
         "Datastore name",
-        validate_datastore_name
+        validate_datastore_name,
+        default=default_datastore
     )
     
     # Valheim server config

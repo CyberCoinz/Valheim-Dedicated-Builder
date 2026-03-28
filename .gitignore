@@ -14,3 +14,11 @@ config/generated/
 *~
 .idea/
 .vscode/
+
+# Sensitive files - NEVER commit these!
+inventory/hosts.ini
+inventory/.temp_*.ini
+config/secrets.yml
+config/local.yml
+.ssh/
+ssh_keys/

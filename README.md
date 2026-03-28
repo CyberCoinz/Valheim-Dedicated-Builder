@@ -90,6 +90,40 @@ pip install -r requirements.txt
 
 # Install Ansible collections
 ansible-galaxy collection install -r ansible/collections/requirements.yml
+
+# Configure local credentials (IMPORTANT!)
+cp config/local.yml.example config/local.yml
+# Edit config/local.yml with your credentials - NEVER commit this file!
+```
+
+### 🔒 Security & Credentials
+
+**NEVER commit sensitive data to this repository!**
+
+- SSH keys, passwords, and host IPs are stored locally in `config/local.yml`
+- This file is automatically excluded by `.gitignore`
+- Use the example template: `config/local.yml.example`
+- Store SSH keys in `~/.ssh/` (also gitignored)
+
+Example `config/local.yml`:
+```yaml
+ssh:
+  default_user: "ubuntu"
+  default_key_path: "~/.ssh/id_ed25519"
+
+esxi:
+  host: "esxi.yourdomain.com"
+  username: "root"
+  password: "your-esxi-password"
+  datastore: "datastore1"
+  vm_template: "ubuntu-24.04-template"
+
+hosts:
+  - name: "home-server"
+    ip: "192.168.1.100"
+    user: "ubuntu"
+    auth: "key"
+    key_path: "~/.ssh/home_key"
 ```
 
 ### Deploy

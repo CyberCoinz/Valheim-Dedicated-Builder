@@ -1,0 +1,31 @@
+# Local configuration file for sensitive data
+# Copy this to config/local.yml and fill in your values
+# NEVER commit config/local.yml to git!
+
+# SSH credentials for existing hosts
+ssh:
+  default_user: "ubuntu"  # Default SSH username
+  default_key_path: "~/.ssh/id_ed25519"  # Default SSH key path
+
+# ESXi connection details
+esxi:
+  host: "your-esxi-host.com"  # ESXi hostname/IP
+  username: "root"  # ESXi username
+  password: ""  # ESXi password - LEAVE BLANK IN TEMPLATE
+  datastore: "datastore1"  # Default datastore name
+  vm_template: "ubuntu-24.04-template"  # VM template name
+
+# Known hosts (optional - for quick selection)
+hosts:
+  - name: "home-server"
+    ip: "192.168.1.100"
+    user: "ubuntu"
+    auth: "password"  # or "key"
+    password: ""  # Leave blank, will prompt
+    key_path: "~/.ssh/id_ed25519"
+
+  - name: "production-server"
+    ip: "10.0.0.50"
+    user: "admin"
+    auth: "key"
+    key_path: "~/.ssh/production_key"
