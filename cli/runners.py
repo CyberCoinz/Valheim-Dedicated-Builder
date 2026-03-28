@@ -3,6 +3,15 @@ from pathlib import Path
 import socket
 
 from config_writer import write_yaml_file
+from validators import (
+    validate_host_address,
+    validate_ssh_username,
+    validate_ssh_key_exists,
+    validate_server_name,
+    validate_world_name,
+    validate_server_password,
+    validate_timezone,
+)
 
 
 def run_cmd(cmd: list[str]) -> None:
@@ -31,6 +40,25 @@ def suggest_available_port(start_port: int = 2456) -> int:
     raise RuntimeError("No available port range found below 65535")
 
 
+def prompt_with_validation(prompt_text: str, validator_func, default: str = None) -> str:
+    """
+    Prompt user for input and validate using provided validator function.
+    Repeats until valid input is provided.
+    """
+    while True:
+        if default:
+            user_input = input(f"{prompt_text} [{default}]: ").strip() or default
+        else:
+            user_input = input(f"{prompt_text}: ").strip()
+        
+        is_valid, error_msg = validator_func(user_input)
+        if is_valid:
+            return user_input
+        else:
+            print(f"  ✗ {error_msg}")
+            print(f"  Please try again.\n")
+
+
 def write_inventory(host: str, ssh_user: str, ssh_key_path: str = None, ssh_password: str = None) -> None:
     if ssh_key_path:
         inventory_text = f"""[valheim_hosts]
@@ -46,27 +74,57 @@ valheim1 ansible_host={host} ansible_user={ssh_user} ansible_ssh_pass={ssh_passw
 
 
 def run_existing_host_deploy() -> None:
-    host = input("Target host/IP: ").strip()
-    ssh_user = input("SSH user: ").strip()
+    print("\n[*] Gathering deployment parameters...\n")
     
+    # Host validation
+    host = prompt_with_validation(
+        "Target host/IP",
+        validate_host_address
+    )
+    
+    # SSH user validation
+    ssh_user = prompt_with_validation(
+        "SSH user",
+        validate_ssh_username
+    )
+    
+    # Authentication method
     auth_method = input("SSH auth method (key/password) [password]: ").strip().lower() or "password"
     
     ssh_key_path = None
     ssh_password = None
     
     if auth_method == "key":
-        ssh_key_path = input("SSH private key path (~/.ssh/id_ed25519): ").strip()
+        ssh_key_path = prompt_with_validation(
+            "SSH private key path",
+            validate_ssh_key_exists,
+            default="~/.ssh/id_ed25519"
+        )
     else:
         ssh_password = input("SSH password: ").strip()
     
-    timezone = input("Timezone [America/New_York]: ").strip() or "America/New_York"
+    # Timezone validation
+    timezone = prompt_with_validation(
+        "Timezone",
+        validate_timezone,
+        default="America/New_York"
+    )
 
-    server_name = input("Server name: ").strip()
-    world_name = input("World name: ").strip()
-    server_password = input("Server password: ").strip()
-
-    if len(server_password) < 5:
-        raise ValueError("Valheim server password must be at least 5 characters.")
+    # Server settings validation
+    server_name = prompt_with_validation(
+        "Server name",
+        validate_server_name
+    )
+    
+    world_name = prompt_with_validation(
+        "World name",
+        validate_world_name
+    )
+    
+    server_password = prompt_with_validation(
+        "Server password (5+ characters)",
+        validate_server_password
+    )
 
     # Port availability check
     base_port = 2456
@@ -102,6 +160,19 @@ def run_existing_host_deploy() -> None:
     write_yaml_file(config, "config/generated/deployment.yml")
     write_inventory(host, ssh_user, ssh_key_path, ssh_password)
 
+    print("\n[*] Configuration summary:")
+    print(f"  Host: {host}")
+    print(f"  User: {ssh_user}")
+    print(f"  Server: {server_name}")
+    print(f"  World: {world_name}")
+    print(f"  Ports: {list(range(base_port, base_port + 3))}")
+    print(f"  Timezone: {timezone}")
+    
+    confirm = input("\nProceed with deployment? (y/n) [y]: ").strip().lower()
+    if confirm == "n":
+        print("Deployment cancelled.")
+        return
+
     ansible_cmd = [
         "ansible-playbook",
         "-i", "inventory/hosts.ini",
@@ -114,10 +185,11 @@ def run_existing_host_deploy() -> None:
     
     run_cmd(ansible_cmd)
     
-    print(f"\n[+] Deployment complete! Valheim server running on ports {list(range(base_port, base_port + 3))}")
+    print(f"\n[✓] Deployment complete! Valheim server running on ports {list(range(base_port, base_port + 3))}")
     print(f"    Server: {server_name}")
     print(f"    World: {world_name}")
     print(f"    Host: {host}")
+    print(f"    Backups: /opt/valheim/backups (daily at 03:00 UTC)")
 
 
 def verify_deployment(host: str, ssh_user: str, ssh_key_path: str = None, ssh_password: str = None) -> None:
