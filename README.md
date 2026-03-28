@@ -92,8 +92,10 @@ pip install -r requirements.txt
 ansible-galaxy collection install -r ansible/collections/requirements.yml
 
 # Configure local credentials (IMPORTANT!)
-cp config/local.yml.example config/local.yml
-# Edit config/local.yml with your credentials - NEVER commit this file!
+./setup_secure.sh
+# Or manually: cp config/local.yml.example config/local.yml
+# Then edit config/local.yml with your credentials - NEVER commit this file!
+```
 ```
 
 ### 🔒 Security & Credentials
