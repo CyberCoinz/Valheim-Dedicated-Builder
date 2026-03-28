@@ -1,0 +1,22 @@
+- name: Enable UFW firewall
+  ufw:
+    state: enabled
+    default: deny
+    direction: incoming
+  when: valheim_enable_firewall
+
+- name: Allow SSH
+  ufw:
+    rule: allow
+    port: "{{ valheim_ssh_port }}"
+    proto: tcp
+  when: valheim_allow_ssh
+
+- name: Allow Valheim game ports (UDP)
+  ufw:
+    rule: allow
+    port: "{{ valheim.base_port | int + item }}"
+    proto: udp
+  loop: [0, 1, 2]
+  loop_control:
+    label: "Valheim UDP port {{ valheim.base_port | int + item }}"

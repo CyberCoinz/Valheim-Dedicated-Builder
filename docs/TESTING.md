@@ -88,8 +88,8 @@ netstat -uln | grep 245[678]
 From local machine:
 
 ```bash
-# Ping container (optionally)
-telnet <target_ip> 2456
+# Check if Valheim port responds (UDP)
+nc -zu <target_ip> 2456 && echo "Port responsive" || echo "Port down"
 ```
 
 Wait **5-10 minutes** after container start for world generation.

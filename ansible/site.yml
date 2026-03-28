@@ -4,5 +4,7 @@
 
   roles:
     - common
+    - firewall
     - docker
     - valheim
+    - backup

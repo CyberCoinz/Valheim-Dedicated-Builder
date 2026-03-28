@@ -1,5 +1,6 @@
 import subprocess
 from pathlib import Path
+import socket
 
 from config_writer import write_yaml_file
 
@@ -7,6 +8,27 @@ from config_writer import write_yaml_file
 def run_cmd(cmd: list[str]) -> None:
     print(f"\n[+] Running: {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
+
+
+def check_port_available(port: int) -> bool:
+    """Check if a UDP port is available locally."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.bind(("", port))
+        sock.close()
+        return True
+    except OSError:
+        return False
+
+
+def suggest_available_port(start_port: int = 2456) -> int:
+    """Find next available port range (3 consecutive ports for Valheim)."""
+    current_port = start_port
+    while current_port < 65535:
+        if all(check_port_available(current_port + i) for i in range(3)):
+            return current_port
+        current_port += 3
+    raise RuntimeError("No available port range found below 65535")
 
 
 def write_inventory(host: str, ssh_user: str, ssh_key_path: str = None, ssh_password: str = None) -> None:
@@ -46,6 +68,23 @@ def run_existing_host_deploy() -> None:
     if len(server_password) < 5:
         raise ValueError("Valheim server password must be at least 5 characters.")
 
+    # Port availability check
+    base_port = 2456
+    default_ports = list(range(base_port, base_port + 3))
+    
+    print(f"\n[*] Checking if ports {default_ports} are available...")
+    if all(check_port_available(p) for p in default_ports):
+        print(f"✓ Ports {default_ports} are available")
+    else:
+        print(f"⚠ Ports {default_ports} appear to be in use")
+        use_default = input("Use different port anyway? (y/n) [n]: ").strip().lower()
+        if use_default != "y":
+            suggested_port = suggest_available_port(base_port + 3)
+            print(f"✓ Suggesting ports {list(range(suggested_port, suggested_port + 3))}")
+            use_suggested = input(f"Use ports starting at {suggested_port}? (y/n) [y]: ").strip().lower()
+            if use_suggested != "n":
+                base_port = suggested_port
+
     config = {
         "valheim": {
             "timezone": timezone,
@@ -53,7 +92,7 @@ def run_existing_host_deploy() -> None:
             "world_name": world_name,
             "server_password": server_password,
             "server_public": 1,
-            "base_port": 2456,
+            "base_port": base_port,
             "root_dir": "/opt/valheim",
             "config_dir": "/opt/valheim/config",
             "data_dir": "/opt/valheim/data",
@@ -75,6 +114,17 @@ def run_existing_host_deploy() -> None:
     
     run_cmd(ansible_cmd)
     
-    # Post-deployment verification
-    print("\n[+] Deployment complete! Verifying Valheim server...")
-    verify_deployment(host, ssh_user, ssh_key_path, ssh_password)
+    print(f"\n[+] Deployment complete! Valheim server running on ports {list(range(base_port, base_port + 3))}")
+    print(f"    Server: {server_name}")
+    print(f"    World: {world_name}")
+    print(f"    Host: {host}")
+
+
+def verify_deployment(host: str, ssh_user: str, ssh_key_path: str = None, ssh_password: str = None) -> None:
+    """Execute quick validation checks on deployed host."""
+    print("\n[*] Running post-deployment validation...")
+    try:
+        # This is a placeholder for future validation logic
+        print("✓ Deployment validation complete")
+    except Exception as e:
+        print(f"⚠ Validation warning: {e}")

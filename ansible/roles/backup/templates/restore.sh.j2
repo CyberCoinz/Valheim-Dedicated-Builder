@@ -1,0 +1,50 @@
+#!/bin/bash
+# Valheim server restore script
+# Restores world data and server config from backup
+
+set -e
+
+BACKUP_DIR="{{ backup_directory }}"
+DATA_DIR="{{ valheim.data_dir }}"
+CONFIG_DIR="{{ valheim.config_dir }}"
+
+if [ -z "$1" ]; then
+    echo "Usage: $0 <backup_file>"
+    echo ""
+    echo "Available backups:"
+    ls -lh "${BACKUP_DIR}"/valheim_backup_*.tar.gz | awk '{print "  " $9}'
+    exit 1
+fi
+
+BACKUP_FILE="$1"
+
+if [ ! -f "${BACKUP_FILE}" ]; then
+    echo "Error: Backup file not found: ${BACKUP_FILE}"
+    exit 1
+fi
+
+echo "[$(date)] Starting restore from: ${BACKUP_FILE}"
+
+# Stop Valheim container
+echo "[$(date)] Stopping Valheim server..."
+cd {{ valheim.root_dir }}
+docker-compose-v2 stop valheim || true
+
+# Restore data
+echo "[$(date)] Restoring data..."
+rm -rf "${DATA_DIR}"/*
+tar -xzf "${BACKUP_FILE}" -C "${DATA_DIR}"
+
+# Restore config if exists
+CONFIG_BACKUP="${BACKUP_FILE}.config"
+if [ -f "${CONFIG_BACKUP}" ]; then
+    echo "[$(date)] Restoring config..."
+    rm -rf "${CONFIG_DIR}"/*
+    tar -xzf "${CONFIG_BACKUP}" -C "${CONFIG_DIR}"
+fi
+
+# Start Valheim container
+echo "[$(date)] Starting Valheim server..."
+docker-compose-v2 up -d valheim
+
+echo "[$(date)] Restore complete!"

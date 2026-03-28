@@ -1,0 +1,4 @@
+valheim_enable_firewall: true
+valheim_allow_ssh: true
+valheim_ssh_port: 22
+valheim_allow_admin_cidr: "0.0.0.0/0"

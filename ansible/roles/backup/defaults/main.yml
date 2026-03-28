@@ -1,0 +1,4 @@
+backup_enabled: true
+backup_directory: "/opt/valheim/backups"
+backup_retention_days: 7
+backup_schedule: "0 3 * * *"
