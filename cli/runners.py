@@ -200,3 +200,183 @@ def verify_deployment(host: str, ssh_user: str, ssh_key_path: str = None, ssh_pa
         print("✓ Deployment validation complete")
     except Exception as e:
         print(f"⚠ Validation warning: {e}")
+
+
+def run_backup_server() -> None:
+    """Backup an existing Valheim server."""
+    print("\n[*] Backup Server\n")
+    
+    host = prompt_with_validation(
+        "Target host/IP",
+        validate_host_address
+    )
+    
+    ssh_user = prompt_with_validation(
+        "SSH user",
+        validate_ssh_username
+    )
+    
+    auth_method = input("SSH auth method (key/password) [password]: ").strip().lower() or "password"
+    
+    ssh_key_path = None
+    ssh_password = None
+    
+    if auth_method == "key":
+        ssh_key_path = prompt_with_validation(
+            "SSH private key path",
+            validate_ssh_key_exists,
+            default="~/.ssh/id_ed25519"
+        )
+    else:
+        ssh_password = input("SSH password: ").strip()
+    
+    # Generate temp inventory for backup command
+    temp_inventory = f"""[valheim_hosts]
+valheim1 ansible_host={host} ansible_user={ssh_user}"""
+    
+    if ssh_key_path:
+        temp_inventory += f" ansible_ssh_private_key_file={ssh_key_path}"
+    else:
+        temp_inventory += f" ansible_ssh_pass={ssh_password}"
+    
+    print("\n[*] Running backup on remote host...")
+    
+    try:
+        cmd = [
+            "ssh",
+            f"{ssh_user}@{host}",
+            "/usr/local/bin/valheim-backup.sh"
+        ]
+        
+        if not ssh_key_path:
+            cmd.insert(1, "-o")
+            cmd.insert(2, "StrictHostKeyChecking=no")
+        else:
+            cmd.insert(1, "-i")
+            cmd.insert(2, ssh_key_path)
+        
+        run_cmd(cmd)
+        print("\n[✓] Backup completed successfully")
+    except Exception as e:
+        print(f"\n[✗] Backup failed: {e}")
+
+
+def run_restore_server() -> None:
+    """Restore a Valheim server from backup."""
+    print("\n[*] Restore Server\n")
+    
+    host = prompt_with_validation(
+        "Target host/IP",
+        validate_host_address
+    )
+    
+    ssh_user = prompt_with_validation(
+        "SSH user",
+        validate_ssh_username
+    )
+    
+    auth_method = input("SSH auth method (key/password) [password]: ").strip().lower() or "password"
+    
+    ssh_key_path = None
+    ssh_password = None
+    
+    if auth_method == "key":
+        ssh_key_path = prompt_with_validation(
+            "SSH private key path",
+            validate_ssh_key_exists,
+            default="~/.ssh/id_ed25519"
+        )
+    else:
+        ssh_password = input("SSH password: ").strip()
+    
+    backup_file = input("Backup file path (on remote host): ").strip()
+    
+    if not backup_file:
+        print("[✗] Backup file path cannot be empty")
+        return
+    
+    confirm = input(f"Restore from {backup_file}? This will stop the server. (y/n) [n]: ").strip().lower()
+    if confirm != "y":
+        print("Restore cancelled.")
+        return
+    
+    print("\n[*] Running restore on remote host...")
+    
+    try:
+        cmd = [
+            "ssh",
+            f"{ssh_user}@{host}",
+            f"/usr/local/bin/valheim-restore.sh {backup_file}"
+        ]
+        
+        if not ssh_key_path:
+            cmd.insert(1, "-o")
+            cmd.insert(2, "StrictHostKeyChecking=no")
+        else:
+            cmd.insert(1, "-i")
+            cmd.insert(2, ssh_key_path)
+        
+        run_cmd(cmd)
+        print("\n[✓] Restore completed successfully")
+    except Exception as e:
+        print(f"\n[✗] Restore failed: {e}")
+
+
+def run_smoke_test() -> None:
+    """Run validation checks on a deployed Valheim server."""
+    print("\n[*] Smoke Test Deployment\n")
+    
+    host = prompt_with_validation(
+        "Target host/IP",
+        validate_host_address
+    )
+    
+    ssh_user = prompt_with_validation(
+        "SSH user",
+        validate_ssh_username
+    )
+    
+    auth_method = input("SSH auth method (key/password) [password]: ").strip().lower() or "password"
+    
+    ssh_key_path = None
+    ssh_password = None
+    
+    if auth_method == "key":
+        ssh_key_path = prompt_with_validation(
+            "SSH private key path",
+            validate_ssh_key_exists,
+            default="~/.ssh/id_ed25519"
+        )
+    else:
+        ssh_password = input("SSH password: ").strip()
+    
+    # Write temp inventory
+    inventory_text = f"""[valheim_hosts]
+valheim1 ansible_host={host} ansible_user={ssh_user}"""
+    
+    if ssh_key_path:
+        inventory_text += f" ansible_ssh_private_key_file={ssh_key_path}"
+    else:
+        inventory_text += f" ansible_ssh_pass={ssh_password}"
+    
+    temp_inventory_path = Path("inventory/.temp_validation.ini")
+    temp_inventory_path.write_text(inventory_text, encoding="utf-8")
+    
+    try:
+        ansible_cmd = [
+            "ansible-playbook",
+            "-i", str(temp_inventory_path),
+            "ansible/validation.yml",
+        ]
+        
+        if not ssh_key_path:
+            ansible_cmd.extend(["-k", "-K"])
+        
+        run_cmd(ansible_cmd)
+        print("\n[✓] Smoke test completed successfully")
+    except Exception as e:
+        print(f"\n[✗] Smoke test failed: {e}")
+    finally:
+        # Cleanup temp inventory
+        if temp_inventory_path.exists():
+            temp_inventory_path.unlink()

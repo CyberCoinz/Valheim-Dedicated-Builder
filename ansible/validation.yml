@@ -1,0 +1,80 @@
+- name: Valheim Server Deployment Validation
+  hosts: valheim_hosts
+  become: false
+
+  tasks:
+    - name: Ping host
+      ping:
+
+    - name: Check Docker is running
+      community.docker.docker_info:
+      register: docker_info
+      failed_when: not docker_info.host_os
+
+    - name: Check Valheim container exists
+      community.docker.docker_container_info:
+        name: valheim-server
+      register: valheim_container
+      failed_when: not valheim_container.exists
+
+    - name: Verify Valheim container is running
+      assert:
+        that:
+          - valheim_container.container.State.Running == true
+        fail_msg: "Valheim container is not running"
+
+    - name: Check Valheim data directory exists
+      stat:
+        path: "{{ valheim.data_dir }}"
+      register: data_dir_stat
+      failed_when: not data_dir_stat.stat.exists
+
+    - name: Check backup directory exists
+      stat:
+        path: /opt/valheim/backups
+      register: backup_dir_stat
+      failed_when: not backup_dir_stat.stat.exists
+
+    - name: Verify backup scripts exist
+      stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/local/bin/valheim-backup.sh
+        - /usr/local/bin/valheim-restore.sh
+      register: script_stat
+      failed_when: not item.stat.exists
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Check Valheim ports listening (UDP)
+      shell: "ss -uln | grep -E ':({{ valheim.base_port | int + item }}|{{ valheim.base_port | int + item }})'"
+      loop: [0, 1, 2]
+      loop_control:
+        label: "UDP port {{ valheim.base_port | int + item }}"
+      changed_when: false
+      ignore_errors: true
+      register: port_check
+
+    - name: Display validation summary
+      debug:
+        msg:
+          - "✓ Deployment validation complete!"
+          - ""
+          - "Server Status:"
+          - "  Container: {{ 'RUNNING ✓' if valheim_container.container.State.Running else 'STOPPED ✗' }}"
+          - "  Docker: {{ 'OK ✓' if docker_info else 'ERROR ✗' }}"
+          - "  Data Directory: {{ data_dir_stat.stat.path }} ✓"
+          - "  Backup Directory: {{ backup_dir_stat.stat.path }} ✓"
+          - "  Backup Scripts: ✓"
+          - ""
+          - "Server Configuration:"
+          - "  Name: {{ valheim.server_name }}"
+          - "  World: {{ valheim.world_name }}"
+          - "  Ports: {{ valheim.base_port }}-{{ valheim.base_port | int + 2 }} (UDP)"
+          - "  Timezone: {{ valheim.timezone }}"
+          - ""
+          - "Next Steps:"
+          - "  1. Wait 5-10 minutes for world generation"
+          - "  2. Connect to server at {{ inventory_hostname }}:{{ valheim.base_port }}"
+          - "  3. Backups run daily at 03:00 UTC"
+          - "  4. Manual backup: /usr/local/bin/valheim-backup.sh"
