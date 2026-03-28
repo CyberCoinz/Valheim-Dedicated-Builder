@@ -9,9 +9,14 @@ def run_cmd(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
-def write_inventory(host: str, ssh_user: str, ssh_key_path: str) -> None:
-    inventory_text = f"""[valheim_hosts]
+def write_inventory(host: str, ssh_user: str, ssh_key_path: str = None, ssh_password: str = None) -> None:
+    if ssh_key_path:
+        inventory_text = f"""[valheim_hosts]
 valheim1 ansible_host={host} ansible_user={ssh_user} ansible_ssh_private_key_file={ssh_key_path}
+"""
+    else:
+        inventory_text = f"""[valheim_hosts]
+valheim1 ansible_host={host} ansible_user={ssh_user} ansible_ssh_pass={ssh_password}
 """
     inventory_path = Path("inventory/hosts.ini")
     inventory_path.parent.mkdir(parents=True, exist_ok=True)
@@ -21,7 +26,17 @@ valheim1 ansible_host={host} ansible_user={ssh_user} ansible_ssh_private_key_fil
 def run_existing_host_deploy() -> None:
     host = input("Target host/IP: ").strip()
     ssh_user = input("SSH user: ").strip()
-    ssh_key_path = input("SSH private key path (~/.ssh/id_ed25519): ").strip()
+    
+    auth_method = input("SSH auth method (key/password) [password]: ").strip().lower() or "password"
+    
+    ssh_key_path = None
+    ssh_password = None
+    
+    if auth_method == "key":
+        ssh_key_path = input("SSH private key path (~/.ssh/id_ed25519): ").strip()
+    else:
+        ssh_password = input("SSH password: ").strip()
+    
     timezone = input("Timezone [America/New_York]: ").strip() or "America/New_York"
 
     server_name = input("Server name: ").strip()
@@ -46,11 +61,16 @@ def run_existing_host_deploy() -> None:
     }
 
     write_yaml_file(config, "config/generated/deployment.yml")
-    write_inventory(host, ssh_user, ssh_key_path)
+    write_inventory(host, ssh_user, ssh_key_path, ssh_password)
 
-    run_cmd([
+    ansible_cmd = [
         "ansible-playbook",
         "-i", "inventory/hosts.ini",
         "ansible/site.yml",
         "-e", "@config/generated/deployment.yml",
-    ])
+    ]
+    
+    if not ssh_key_path:
+        ansible_cmd.append("-k")
+    
+    run_cmd(ansible_cmd)
