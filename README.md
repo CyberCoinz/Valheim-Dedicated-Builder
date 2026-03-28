@@ -53,7 +53,7 @@ Valheim Builder is an orchestration tool that:
 
 ### Prerequisites for VM Creation
 - VMware ESXi host with SSH access
-- Ubuntu VM template configured for cloning
+- Existing Ubuntu VM to clone from (can be your tested VM)
 - Datastore with sufficient space
 - ESXi credentials with VM creation permissions
 

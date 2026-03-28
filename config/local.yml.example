@@ -13,7 +13,7 @@ esxi:
   username: "root"  # ESXi username
   password: ""  # ESXi password - LEAVE BLANK IN TEMPLATE
   datastore: "datastore1"  # Default datastore name
-  vm_template: "ubuntu-24.04-template"  # VM template name
+  vm_template: "ubuntu-vm-name"  # Name of existing Ubuntu VM to clone from
 
 # Known hosts (optional - for quick selection)
 hosts:

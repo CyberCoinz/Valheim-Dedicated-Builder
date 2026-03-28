@@ -464,35 +464,36 @@ def get_obj(content, vimtype, name):
     return obj
 
 
-def clone_vm(service_instance, template_name: str, vm_name: str, datastore_name: str):
-    """Clone VM from template."""
+def clone_vm(service_instance, source_vm_name: str, vm_name: str, datastore_name: str, is_template: bool = True):
+    """Clone VM from template or existing VM."""
     content = service_instance.RetrieveContent()
     
-    # Find template
-    template = get_obj(content, [vim.VirtualMachine], template_name)
-    if not template:
-        raise Exception(f"Template '{template_name}' not found")
+    # Find source VM/template
+    source_vm = get_obj(content, [vim.VirtualMachine], source_vm_name)
+    if not source_vm:
+        raise Exception(f"Source VM/template '{source_vm_name}' not found")
     
     # Find datastore
     datastore = get_obj(content, [vim.Datastore], datastore_name)
     if not datastore:
         raise Exception(f"Datastore '{datastore_name}' not found")
     
-    # Get the folder where the template is located
-    destfolder = template.parent
+    # Get the folder where the source VM is located
+    destfolder = source_vm.parent
     
     # VM relocation spec
     relospec = vim.vm.RelocateSpec()
     relospec.datastore = datastore
-    relospec.pool = template.resourcePool
+    relospec.pool = source_vm.resourcePool
     
     # VM clone spec
     clonespec = vim.vm.CloneSpec()
     clonespec.location = relospec
     clonespec.powerOn = True
     
-    print(f"[*] Cloning VM '{vm_name}' from template '{template_name}'...")
-    task = template.Clone(folder=destfolder, name=vm_name, spec=clonespec)
+    source_type = "template" if is_template else "VM"
+    print(f"[*] Cloning {source_type} '{source_vm_name}' to create VM '{vm_name}'...")
+    task = source_vm.Clone(folder=destfolder, name=vm_name, spec=clonespec)
     
     # Wait for task completion
     while task.info.state not in [vim.TaskInfo.State.success, vim.TaskInfo.State.error]:
@@ -569,16 +570,16 @@ def run_create_vm_deploy() -> None:
         return
     
     # VM details
-    default_template = esxi_config.get('vm_template', '')
-    if default_template:
-        vm_template = prompt_with_validation(
-            "VM template name",
-            validate_vm_template_name,
-            default=default_template
+    default_source = esxi_config.get('vm_template', '')  # Keeping same key for backward compatibility
+    if default_source:
+        vm_source = prompt_with_validation(
+            "Source VM/template name to clone from",
+            validate_vm_template_name,  # Reusing same validator
+            default=default_source
         )
     else:
-        vm_template = prompt_with_validation(
-            "VM template name",
+        vm_source = prompt_with_validation(
+            "Source VM/template name to clone from",
             validate_vm_template_name
         )
     
@@ -636,7 +637,7 @@ def run_create_vm_deploy() -> None:
     
     print("\n[*] Configuration summary:")
     print(f"  ESXi Host: {esxi_host}")
-    print(f"  VM Template: {vm_template}")
+    print(f"  Source VM: {vm_source}")
     print(f"  New VM: {vm_name}")
     print(f"  Datastore: {datastore}")
     print(f"  Server: {server_name}")
@@ -656,7 +657,7 @@ def run_create_vm_deploy() -> None:
         service_instance = connect_to_esxi(esxi_host, esxi_user, esxi_password)
         
         # Clone VM
-        cloned_vm = clone_vm(service_instance, vm_template, vm_name, datastore)
+        cloned_vm = clone_vm(service_instance, vm_source, vm_name, datastore, is_template=False)
         print(f"[✓] VM '{vm_name}' created successfully")
         
         # Wait for VM to get IP
